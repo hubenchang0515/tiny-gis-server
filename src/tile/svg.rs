@@ -1,22 +1,22 @@
-use std::cmp::Ordering;
-
 use crate::{geometry::{Point, Polygon, Polyline, Rectangle}, xml::XmlNode};
 use super::{Proj, Tile};
 
 
 #[allow(dead_code)]
 pub struct PolylineProps {
-    color: String,
-    width: usize,
+    pub color: String,
+    pub width: usize,
+    pub priority: i32,
 }
 
 
 #[allow(dead_code)]
 impl PolylineProps {
-    pub fn new(color: &str, width: usize) -> PolylineProps {
-        PolylineProps{
+    pub fn new(color: &str, width: usize, priority: i32) -> PolylineProps {
+        PolylineProps {
             color: String::from(color),
-            width
+            width,
+            priority,
         }
     }
 }
@@ -24,36 +24,42 @@ impl PolylineProps {
 
 #[allow(dead_code)]
 pub struct TextProps {
-    color: String,
-    size: usize,
-    weight: usize,
+    pub fill_color: String,
+    pub size: usize,
+    pub weight: usize,
+    pub priority: i32,
 }
 
 #[allow(dead_code)]
 impl TextProps {
-    pub fn new(color: &str, size: usize, weight: usize) -> TextProps {
-        TextProps{
-            color: String::from(color),
+    pub fn new(fill_color: &str, size: usize, weight: usize, priority: i32) -> TextProps {
+        TextProps {
+            fill_color: String::from(fill_color),
             size,
-            weight
+            weight,
+            priority,
         }
     }
 }
 
 #[allow(dead_code)]
 pub struct PolygonProps {
-    fill_color: String,
-    border_color: String,
-    border_width: usize,
+    pub fill_color: String,
+    pub border_color: String,
+    pub border_width: usize,
+    pub fill_priority: i32,
+    pub border_priority: i32,
 }
 
 #[allow(dead_code)]
 impl PolygonProps {
-    pub fn new(fill_color: &str, border_color: &str, border_width: usize) -> PolygonProps {
-        PolygonProps{
+    pub fn new(fill_color: &str, border_color: &str, border_width: usize, fill_priority: i32, border_priority: i32) -> PolygonProps {
+        PolygonProps {
             fill_color: String::from(fill_color),
             border_color: String::from(border_color),
-            border_width
+            border_width,
+            fill_priority,
+            border_priority,
         }
     }
 }
@@ -79,25 +85,33 @@ impl SvgTile {
         SvgTile { x, y, z, proj, xml, id_count:0 }
     }
 
-    pub fn sort_tags(&mut self) {
-        self.xml.sort_nodes(|a, b|{
-            if a.tag() == "text" {
-                Ordering::Greater
-            } else if b.tag() == "text" {
-                Ordering::Less
-            } else {
-                Ordering::Equal
+    pub fn text_size(text: &str, text_props: &TextProps) -> Rectangle {
+        Rectangle { 
+            min: Point { 
+                x: 0.0,
+                y: 0.0 
+            }, 
+            max: Point { 
+                x: (text.len() * text_props.size / 2) as f64, 
+                y: text_props.size as f64
             }
-        });
+        }
+    }
+
+    pub fn sort_tags(&mut self) {
+        self.xml.sort();
     }
 
     pub fn append_text(&mut self, point: &Point, text: &str, props: &TextProps) {
         let mut node = XmlNode::new("text", text);
         let (x, y) = self.local((point.x, point.y));
-        node.set_attr("x", &x.to_string());
+        let text_size = SvgTile::text_size(text, props);
+        node.set_attr("x", &(x - text_size.width()/2.0).to_string());
         node.set_attr("y", &y.to_string());
-        node.set_attr("fill", &props.color);
+        node.set_attr("fill", &props.fill_color);
         node.set_attr("font-size", &props.size.to_string());
+        node.set_attr("font-weight", &props.weight.to_string());
+        node.set_priority(props.priority);
         self.xml.add_node(node);
     }
 
@@ -120,7 +134,7 @@ impl SvgTile {
                 prev = current;
             }
         }
-        
+
         self.id_count = self.id_count + 1;
         let id: String = format!("ID_{}", self.id_count);
         let mut path = XmlNode::new("path", "");
@@ -129,19 +143,24 @@ impl SvgTile {
         path.set_attr("stroke", &line_props.color);
         path.set_attr("stroke-width", &line_props.width.to_string());
         path.set_attr("d", &data);
+        path.set_priority(line_props.priority);
         self.xml.add_node(path);
 
-        let offset = (path_length - (text_props.size * text.len() / 2) as f64) / 2.0;
-        let mut text_path = XmlNode::new("textPath", &text);
-        text_path.set_attr("href", &format!("#{}", &id));
-        text_path.set_attr("startOffset", &offset.to_string());
-        text_path.set_attr("font-size", &text_props.size.to_string());
-        text_path.set_attr("font-weight", &text_props.weight.to_string());
-        text_path.set_attr("fill", &text_props.color);
-        
-        let mut text = XmlNode::new("text", "");
-        text.add_node(text_path);
-        self.xml.add_node(text);
+        let offset = (path_length - SvgTile::text_size(text, text_props).width()) / 2.0;
+
+        if offset > 10.0 {
+            let mut text_path = XmlNode::new("textPath", &text);
+            text_path.set_attr("href", &format!("#{}", &id));
+            text_path.set_attr("startOffset", &offset.to_string());
+            text_path.set_attr("font-size", &text_props.size.to_string());
+            text_path.set_attr("font-weight", &text_props.weight.to_string());
+            text_path.set_attr("fill", &text_props.fill_color);
+            
+            let mut text = XmlNode::new("text", "");
+            text.add_node(text_path);
+            text.set_priority(text_props.priority);
+            self.xml.add_node(text);
+        }
     }
 
     pub fn append_polyline(&mut self, polyline: &Polyline, props: &PolylineProps) {
@@ -156,22 +175,31 @@ impl SvgTile {
 
         let style = format!("fill:none;stroke:{};stroke-width:{}", &props.color, &props.width);
         node.set_attr("style", &style);
+        node.set_priority(props.priority);
         self.xml.add_node(node);
     }
 
     pub fn append_polygon(&mut self, polygon: &Polygon, props: &PolygonProps) {
-        let mut node = XmlNode::new("polygon", "");
         let mut points = Vec::new();
         for point in polygon.points() {
             let (x, y) = self.local((point.x, point.y));
             points.push(format!("{},{}", x, y));
         }
         let points = points.join(" ");
-        node.set_attr("points", &points);
 
-        let style = format!("fill:{};stroke:{};stroke-width:{}", &props.fill_color, &props.border_color, &props.border_width);
-        node.set_attr("style", &style);
-        self.xml.add_node(node);
+        let mut polygon_node = XmlNode::new("polygon", "");
+        let style = format!("fill:{};stroke:{};", &props.fill_color, &props.fill_color);
+        polygon_node.set_attr("points", &points);
+        polygon_node.set_attr("style", &style);
+        polygon_node.set_priority(props.fill_priority);
+        self.xml.add_node(polygon_node);
+
+        let mut polyline_node = XmlNode::new("polyline", "");
+        let style = format!("fill:none;stroke:{};stroke-width:{}", &props.border_color, &props.border_width);
+        polyline_node.set_attr("points", &points);
+        polyline_node.set_attr("style", &style);
+        polyline_node.set_priority(props.border_priority);
+        self.xml.add_node(polyline_node);
     }
 }
 
@@ -234,7 +262,7 @@ mod tests {
         svg.append_text(
             &Point { x: -180.0, y: 0.0 }, 
             "hello world", 
-            &TextProps::new("reg", 32, 700)
+            &TextProps::new("red", 32, 700, 10)
         );
         
         let mut polyline = Polyline::new();
@@ -244,13 +272,13 @@ mod tests {
         polyline.append(&Point { x: LONGITUDE_MIN, y: LATITUDE_MAX });
         svg.append_polyline(
             &polyline, 
-            &PolylineProps::new("red", 5)
+            &PolylineProps::new("red", 5, 10)
         );
         svg.append_text_path(
             &polyline, 
             "TEXT PATH", 
-            &PolylineProps::new("green", 3), 
-            &TextProps::new("blue", 32, 700)
+            &PolylineProps::new("green", 3, 10), 
+            &TextProps::new("blue", 32, 700, 10)
         );
 
         let mut polygon = Polygon::new();
@@ -260,10 +288,10 @@ mod tests {
         polygon.append(&Point { x: LONGITUDE_MAX, y: LATITUDE_MAX });
         svg.append_polygon(
             &polygon,
-            &PolygonProps::new("green", "cyan", 3)
+            &PolygonProps::new("green", "cyan", 3, 5, 10)
         );
 
         svg.sort_tags();
-        println!("{}", String::from_utf8(svg.dump()).unwrap());
+        println!("SVG:{}", String::from_utf8(svg.dump()).unwrap());
     }
 }

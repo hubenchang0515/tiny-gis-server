@@ -14,8 +14,60 @@ use tile::{PolygonProps, PolylineProps, SvgTile, TextProps, Tile};
 
 use crate::{geometry::Rectangle, tile::{tile::svg_to_png, Proj}};
 
+#[allow(dead_code)]
+pub mod colors {
+    pub const REGION_FILL_COLOR: &str = "#d3f8e2";
+    pub const REGION_BORDER_COLOR: &str = "#5491f5";
+    pub const REGION_TEXT_COLOR: &str = "#5491f5";
+
+    pub const WATER_FILL_COLOR: &str = "#90daee";
+    pub const WATER_BORDER_COLOR: &str = "#90daee";
+    pub const WATER_TEXT_COLOR: &str = "#000000";
+
+    pub const LAND_FILL_COLOR: &str = "#f5f0e5";
+    pub const LAND_BORDER_COLOR: &str = "#aab9c9";
+    pub const LAND_TEXT_COLOR: &str = "#000000";
+
+    pub const ROAD_FILL_COLOR: &str = "#aab9c9";
+    pub const ROAD_BORDER_COLOR: &str = "#78909c";
+    pub const ROAD_TEXT_COLOR: &str = "#000000";
+
+    pub const BUILDING_FILL_COLOR: &str = "#e8e9ed";
+    pub const BUILDING_BORDER_COLOR: &str = "#aab9c9";
+    pub const BUILDING_TEXT_COLOR: &str = "#000000";
+}
+
+#[allow(dead_code)]
+pub mod priorities {
+    pub const REGION_FILL_PRIORITY: i32 = 10;
+    pub const REGION_BORDER_PRIORITY: i32 = 20;
+    pub const REGION_TEXT_PRIORITY: i32 = 30;
+
+    pub const WATER_FILL_PRIORITY: i32 = 10;
+    pub const WATER_BORDER_PRIORITY: i32 = 20;
+    pub const WATER_TEXT_PRIORITY: i32 = 30;
+
+    pub const LAND_FILL_PRIORITY: i32 = 10;
+    pub const LAND_BORDER_PRIORITY: i32 = 20;
+    pub const LAND_TEXT_PRIORITY: i32 = 30;
+
+    pub const ROAD_FILL_PRIORITY: i32 = 10;
+    pub const ROAD_BORDER_PRIORITY: i32 = 20;
+    pub const ROAD_TEXT_PRIORITY: i32 = 30;
+
+    pub const BUILDING_FILL_PRIORITY: i32 = 10;
+    pub const BUILDING_BORDER_PRIORITY: i32 = 20;
+    pub const BUILDING_TEXT_PRIORITY: i32 = 30;
+}
+
+#[allow(dead_code)]
+pub mod zooms {
+    pub const SHOW_POLYLINE: u64 = 10;
+    pub const SHOW_TEXT: u64 = 10;
+}
+
 struct AppState {
-    border: Mutex<ShapeFile>,
+    region: Mutex<ShapeFile>,
     water: Mutex<ShapeFile>,
     land: Mutex<ShapeFile>,
     road: Mutex<ShapeFile>,
@@ -26,7 +78,7 @@ struct AppState {
 impl AppState {
     pub fn new() -> AppState {
         AppState { 
-            border: Mutex::new(ShapeFile::new()), 
+            region: Mutex::new(ShapeFile::new()), 
             water: Mutex::new(ShapeFile::new()), 
             land: Mutex::new(ShapeFile::new()),
             road: Mutex::new(ShapeFile::new()), 
@@ -35,8 +87,8 @@ impl AppState {
         }
     }
 
-    pub fn load_border(&mut self, file: &str) {
-        self.border.get_mut().unwrap().load(file);
+    pub fn load_region(&mut self, file: &str) {
+        self.region.get_mut().unwrap().load(file);
     }
 
     pub fn load_water(&mut self, file: &str) {
@@ -74,19 +126,18 @@ impl AppState {
 
             match &node.shape {
                 Shape::Polyline(polyline) => {
-                    if tile.z() > 12 && !node.info.name.is_empty() {
+                    if tile.z() > zooms::SHOW_TEXT && !node.info.name.is_empty() {
                         tile.append_text_path(polyline, &node.info.name, polyline_props, text_props);
-                    } else {
+                    } else if tile.z() > zooms::SHOW_POLYLINE {
                         tile.append_polyline(polyline, polyline_props);
                     }
                 },
-    
+
                 Shape::Polygon(polygon) => {
                     tile.append_polygon(polygon, polygon_props);
-
-                    if tile.z() > 17 && !node.info.name.is_empty() {
-                        let point = polygon.point(0);
-                        tile.append_text(point, &node.info.name, text_props);
+                    let text_size = SvgTile::text_size(&node.info.name, text_props);
+                    if !node.info.name.is_empty() && rect.width() > text_size.width() && rect.height() > text_size.height() {
+                        tile.append_text(&node.info.rect.center(), &node.info.name, text_props);
                     }
                 },
     
@@ -106,60 +157,141 @@ async fn maps(state: web::Data<AppState>, path: web::Path<(u64, u64, u64)>) -> i
     let id = format!("tile:{}-{}-{}", z, x, y);
     let mut cache = state.cache.lock().unwrap();
     if let Some(data) = cache.get(&id) {
-        HttpResponse::Ok().append_header(("Access-Control-Allow-Origin", "*")).content_type("image/png").body(data.clone())
+        HttpResponse::Ok()
+            .append_header(("Access-Control-Allow-Origin", "*"))
+            .content_type("image/png")
+            .body(data.clone())
     } else {
         let mut tile = SvgTile::new(x, y, z, proj);
         state.draw_tile(
             &mut tile, 
-            &state.border.lock().unwrap(), 
-            &PolygonProps::new("#4caf50", "#33eb91", 3), 
-            &PolylineProps::new("#33eb91", 3), 
-            &TextProps::new("black", 32, 700)
+            &state.region.lock().unwrap(), 
+            &PolygonProps::new(
+                colors::REGION_FILL_COLOR, 
+                colors::REGION_BORDER_COLOR, 
+                3, 
+                priorities::REGION_FILL_PRIORITY, 
+                priorities::REGION_BORDER_PRIORITY
+            ), 
+            &PolylineProps::new(
+                colors::REGION_BORDER_COLOR, 
+                3, 
+                priorities::REGION_BORDER_PRIORITY
+            ), 
+            &TextProps::new(
+                colors::REGION_TEXT_COLOR, 
+                32, 
+                700, 
+                priorities::REGION_TEXT_PRIORITY
+            )
         );
 
         state.draw_tile(
             &mut tile, 
             &state.water.lock().unwrap(), 
-            &PolygonProps::new("#33eaff", "#33eaff", 3), 
-            &PolylineProps::new("#33eaff", 3), 
-            &TextProps::new("black", 20, 700)
+            &PolygonProps::new(
+                colors::WATER_FILL_COLOR, 
+                colors::WATER_BORDER_COLOR, 
+                1, 
+                priorities::WATER_FILL_PRIORITY,
+                priorities::WATER_BORDER_PRIORITY
+            ), 
+            &PolylineProps::new(
+                colors::WATER_BORDER_COLOR, 
+                1, 
+                priorities::WATER_BORDER_PRIORITY
+            ), 
+            &TextProps::new(
+                colors::WATER_TEXT_COLOR, 
+                20, 
+                700, 
+                priorities::WATER_TEXT_PRIORITY
+            )
         );
         
         state.draw_tile(
             &mut tile, 
             &state.land.lock().unwrap(), 
-            &PolygonProps::new("#aaaaaa", "#eeeeee", 1), 
-            &PolylineProps::new("#eeeeee", 3), 
-            &TextProps::new("black", 20, 700)
+            &PolygonProps::new(
+                colors::LAND_FILL_COLOR, 
+                colors::LAND_BORDER_COLOR, 
+                1, 
+                priorities::LAND_FILL_PRIORITY,
+                priorities::LAND_BORDER_PRIORITY
+            ), 
+            &PolylineProps::new(
+                colors::LAND_BORDER_COLOR, 
+                3,
+                priorities::LAND_BORDER_PRIORITY
+            ), 
+            &TextProps::new(
+                colors::LAND_TEXT_COLOR, 
+                20, 
+                700, 
+                priorities::LAND_TEXT_PRIORITY
+            )
         );
 
         state.draw_tile(
             &mut tile, 
             &state.road.lock().unwrap(), 
-            &PolygonProps::new("#ff9100", "#ff9100", 1), 
-            &PolylineProps::new("#ff9100", 3), 
-            &TextProps::new("black", 20, 700)
+            &PolygonProps::new(
+                colors::ROAD_FILL_COLOR, 
+                colors::ROAD_BORDER_COLOR, 
+                1, 
+                priorities::REGION_FILL_PRIORITY, 
+                priorities::REGION_BORDER_PRIORITY
+            ), 
+            &PolylineProps::new(
+                colors::ROAD_BORDER_COLOR, 
+                3, 
+                priorities::ROAD_BORDER_PRIORITY
+            ), 
+            &TextProps::new(
+                colors::ROAD_TEXT_COLOR, 
+                20, 
+                900, 
+                priorities::ROAD_TEXT_PRIORITY
+            )
         );
 
         state.draw_tile(
             &mut tile, 
             &state.building.lock().unwrap(), 
-            &PolygonProps::new("#5393ff", "#ffffff", 1), 
-            &PolylineProps::new("#2196f3", 3), 
-            &TextProps::new("black", 20, 700)
+            &PolygonProps::new(
+                colors::BUILDING_FILL_COLOR, 
+                colors::BUILDING_BORDER_COLOR, 
+                1, 
+                priorities::BUILDING_FILL_PRIORITY,
+                priorities::BUILDING_BORDER_PRIORITY
+            ), 
+            &PolylineProps::new(
+                colors::BUILDING_BORDER_COLOR, 
+                3, 
+                priorities::BUILDING_BORDER_PRIORITY
+            ), 
+            &TextProps::new(
+                colors::BUILDING_TEXT_COLOR, 
+                20, 
+                700, 
+                priorities::BUILDING_TEXT_PRIORITY
+            )
         );
 
         tile.sort_tags();
         let data = svg_to_png(&tile.dump()).unwrap();
         cache.save(&id, data.clone());
-        HttpResponse::Ok().append_header(("Access-Control-Allow-Origin", "*")).content_type("image/png").body(data)
+        HttpResponse::Ok()
+            .append_header(("Access-Control-Allow-Origin", "*"))
+            .content_type("image/png")
+            .body(data)
     }
 }
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     let mut app_state: AppState = AppState::new();
-        app_state.load_border("resource/wuhan/wuhan_border.shp");
+        app_state.load_region("resource/wuhan/wuhan_region.shp");
         app_state.load_water("resource/wuhan/wuhan_water.shp");
         app_state.load_land("resource/wuhan/wuhan_land.shp");
         app_state.load_road("resource/wuhan/wuhan_road.shp");

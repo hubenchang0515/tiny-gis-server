@@ -31,6 +31,21 @@ impl Rectangle {
         let vec = &self.max - &self.min;
         vec.x * vec.y
     }
+
+    pub fn width(&self) -> f64 {
+        self.max.x - self.min.x
+    }
+
+    pub fn height(&self) -> f64 {
+        self.max.y - self.min.y
+    }
+
+    pub fn center(&self) -> Point {
+        Point { 
+            x: (self.min.x + self.max.x) / 2.0, 
+            y: (self.min.y + self.max.y) / 2.0,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -65,13 +80,25 @@ mod tests {
     }
 
     #[test]
-    fn test_area()
-    {
+    fn test_area() {
         let rect = Rectangle::uninitialized();
         assert_eq!(rect.area().is_nan(), true);
 
         let rect = Rectangle::new(&Point { x: -3.0, y: -2.0 }, &Point { x: 11.0, y: 13.0 });
         assert_eq!(rect.area().is_nan(), false);
         assert_eq!(rect.area(), 210.0);
+    }
+
+    #[test]
+    fn test_width_height() {
+        let rect = Rectangle::new(&Point { x: 3.0, y: 7.0 }, &Point { x: 9.0, y: 14.0 });
+        assert_eq!(rect.width(), 6.0);
+        assert_eq!(rect.height(), 7.0);
+    }
+
+    #[test]
+    fn test_center() {
+        let rect = Rectangle::new(&Point { x: 3.0, y: 7.0 }, &Point { x: 9.0, y: 14.0 });
+        assert_eq!(rect.center(), Point{x: 6.0, y: 10.5});
     }
 }

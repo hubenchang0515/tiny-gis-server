@@ -14,16 +14,24 @@ pub trait Tile {
 
 pub fn svg_to_png(svg: &Vec<u8>) -> Option<Vec<u8>> {
     let pixmap = Pixmap::new(256, 256);
-    let mut fontdb = Database::new();
-    fontdb.load_system_fonts();
-    let tree = Tree::from_data(svg, &Options::default(), &fontdb);
-    if pixmap.is_some() && tree.is_ok() {
-        let tree = tree.unwrap();
-        let mut pixmap = pixmap.unwrap();
-        resvg::render(&tree, Transform::from_rotate(0.0), &mut pixmap.as_mut());
-        Some(pixmap.encode_png().unwrap())
-    } else {
+    if pixmap.is_none() {
         None
+    } else {
+        let mut fontdb = Database::new();
+        fontdb.load_system_fonts();
+        let tree = Tree::from_data(svg, &Options::default(), &fontdb);
+        match tree {
+            Ok(tree) => {
+                let mut pixmap = pixmap.unwrap();
+                resvg::render(&tree, Transform::from_rotate(0.0), &mut pixmap.as_mut());
+                Some(pixmap.encode_png().unwrap())
+            }
+            Err(err) => {
+                println!("{}", String::from_utf8((*svg).clone()).unwrap());
+                println!("{}", err);
+                None
+            }
+        }
     }
 }
 

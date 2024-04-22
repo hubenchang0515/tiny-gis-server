@@ -7,16 +7,27 @@ pub struct XmlNode {
     text: String,
     attrs: HashMap<String, String>,
     nodes: Vec<XmlNode>,
+    priority: i32,
 }
+
 
 #[allow(dead_code)]
 impl XmlNode {
+    fn escape(text: &str) -> String {
+        String::from(text)
+            .replace("&", "&amp;")
+            .replace("<", "&l;")
+            .replace(">", "&gt;")
+            .replace("\"", "&quot;")
+            .replace("'", "&apos;")
+    }
     pub fn new(tag: &str, text: &str) -> XmlNode {
         XmlNode { 
-            tag: String::from(tag), 
-            text: String::from(text), 
+            tag: XmlNode::escape(tag),
+            text: XmlNode::escape(text),
             attrs: HashMap::new(), 
             nodes: Vec::new(),
+            priority: 0,
          }
     }
 
@@ -37,19 +48,29 @@ impl XmlNode {
         xml
     }
 
+    pub fn set_priority(&mut self, priority: i32) {
+        self.priority = priority;
+    }
+
     pub fn set_attr(&mut self, key: &str, value: &str) {
-        self.attrs.insert(String::from(key), String::from(value));
+        self.attrs.insert(XmlNode::escape(key), XmlNode::escape(value));
     }
 
     pub fn add_node(&mut self, node: XmlNode) {
         self.nodes.push(node);
     }
 
-    pub fn sort_nodes<F>(&mut self, compare: F)
-    where
-        F: FnMut(&XmlNode, &XmlNode) -> Ordering,
+    pub fn sort(&mut self, )
     {
-        self.nodes.sort_by(compare)
+        self.nodes.sort_by(|a, b|{
+            if a.priority < b.priority {
+                Ordering::Less
+            } else if a.priority > b.priority {
+                Ordering::Greater
+            } else {
+                Ordering::Equal
+            }
+        });
     }
 }
 
