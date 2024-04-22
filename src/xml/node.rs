@@ -61,9 +61,9 @@ mod tests {
     fn test_xml_node() {
         let mut svg = XmlNode::new("SVG", "");
         svg.set_attr("xmlns", "http://www.w3.org/2000/svg");
-        svg.set_attr("width", "255");
-        svg.set_attr("height", "255");
-        svg.set_attr("viewBox", "0 0 255 255");
+        svg.set_attr("width", "256");
+        svg.set_attr("height", "256");
+        svg.set_attr("viewBox", "0 0 256 256");
 
         let mut path = XmlNode::new("path", "");
         path.set_attr("id", "PATH_0");

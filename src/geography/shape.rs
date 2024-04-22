@@ -94,7 +94,7 @@ mod tests {
     #[test]
     fn test_shapefile() {
         let mut shp = ShapeFile::new();
-        shp.load("resource/wuhan_road.shp");
+        shp.load("resource/wuhan/wuhan_road.shp");
         for node in shp.nodes() {
             if !node.info.name.is_empty() {
                 println!("{}", node.info.name);

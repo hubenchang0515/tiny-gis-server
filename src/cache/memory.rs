@@ -33,3 +33,23 @@ impl Cache for MemoryCache {
         self.data.remove(id);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::cache::Cache;
+
+    use super::MemoryCache;
+
+    #[test]
+    fn test_memory_cache() {
+        let mut data = Vec::<u8>::new();
+        data.append(&mut "hello world".as_bytes().to_vec());
+        let mut cache = MemoryCache::new();
+        assert_eq!(cache.has("ID0"), false);
+        cache.save("ID0", data);
+        assert_eq!(cache.has("ID0"), true);
+        assert_eq!(cache.get("ID0").unwrap(), &"hello world".as_bytes().to_vec());
+        cache.delete("ID0");
+        assert_eq!(cache.has("ID0"), false);
+    }
+}

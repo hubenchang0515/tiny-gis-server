@@ -30,6 +30,36 @@ impl Polyline {
     }
 
     pub fn center(&self) -> &Point {
-        &self.points[self.points.len()/2]
+        &self.points[(self.points.len()+1)/2]
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_polyline() {
+        let mut polyline = Polyline::new();
+        polyline.append(&Point { x: 0.0, y: 0.0 });
+        polyline.append(&Point { x: 1.0, y: 0.0 });
+        assert_eq!(polyline.points_count(), 2);
+        polyline.append(&Point { x: 1.0, y: 1.0 });
+        polyline.append(&Point { x: 0.0, y: 1.0 });
+        assert_eq!(polyline.points_count(), 4);
+
+        assert_eq!(polyline.point(0), &Point { x: 0.0, y: 0.0 });
+        assert_eq!(polyline.point(1), &Point { x: 1.0, y: 0.0 });
+        assert_eq!(polyline.point(2), &Point { x: 1.0, y: 1.0 });
+        assert_eq!(polyline.point(3), &Point { x: 0.0, y: 1.0 });
+
+        assert_eq!(polyline.points[0], Point { x: 0.0, y: 0.0 });
+        assert_eq!(polyline.points[1], Point { x: 1.0, y: 0.0 });
+        assert_eq!(polyline.points[2], Point { x: 1.0, y: 1.0 });
+        assert_eq!(polyline.points[3], Point { x: 0.0, y: 1.0 });
+
+        assert_eq!(polyline.center(), polyline.point(2));
+        polyline.append(&Point { x: 0.0, y: 1.0 });
+        assert_eq!(polyline.center(), polyline.point(3));
     }
 }

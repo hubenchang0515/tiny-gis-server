@@ -10,7 +10,7 @@ use actix_web::{get, web, App, HttpResponse, HttpServer, Responder};
 use cache::{Cache, MemoryCache};
 use geography::ShapeFile;
 use geometry::{Shape, Point};
-use tile::{Tile, SvgTile};
+use tile::{PolygonProps, PolylineProps, SvgTile, TextProps, Tile};
 
 use crate::{geometry::Rectangle, tile::{tile::svg_to_png, Proj}};
 
@@ -55,7 +55,7 @@ impl AppState {
         self.building.get_mut().unwrap().load(file);
     }
 
-    pub fn draw_tile(&self, tile: &mut SvgTile, shapes: &ShapeFile, fill_color: &str, line_color: &str, line_width: usize) {
+    pub fn draw_tile(&self, tile: &mut SvgTile, shapes: &ShapeFile, polygon_props: &PolygonProps, polyline_props: &PolylineProps, text_props: &TextProps) {
         for node in shapes.nodes() {
             let rect = Rectangle::new(
                 &Point{
@@ -75,18 +75,18 @@ impl AppState {
             match &node.shape {
                 Shape::Polyline(polyline) => {
                     if tile.z() > 12 && !node.info.name.is_empty() {
-                        tile.append_text_path(polyline, &node.info.name, line_color, line_width);
+                        tile.append_text_path(polyline, &node.info.name, polyline_props, text_props);
                     } else {
-                        tile.append_polyline(polyline, line_color, line_width);
+                        tile.append_polyline(polyline, polyline_props);
                     }
                 },
     
                 Shape::Polygon(polygon) => {
-                    tile.append_polygon(polygon, fill_color, line_color, line_width);
+                    tile.append_polygon(polygon, polygon_props);
 
                     if tile.z() > 17 && !node.info.name.is_empty() {
                         let point = polygon.point(0);
-                        tile.append_text(point, &node.info.name);
+                        tile.append_text(point, &node.info.name, text_props);
                     }
                 },
     
@@ -109,12 +109,45 @@ async fn maps(state: web::Data<AppState>, path: web::Path<(u64, u64, u64)>) -> i
         HttpResponse::Ok().append_header(("Access-Control-Allow-Origin", "*")).content_type("image/png").body(data.clone())
     } else {
         let mut tile = SvgTile::new(x, y, z, proj);
+        state.draw_tile(
+            &mut tile, 
+            &state.border.lock().unwrap(), 
+            &PolygonProps::new("#4caf50", "#33eb91", 3), 
+            &PolylineProps::new("#33eb91", 3), 
+            &TextProps::new("black", 32, 700)
+        );
 
-        state.draw_tile(&mut tile, &state.border.lock().unwrap(), "#4caf50", "#33eb91", 3);
-        state.draw_tile(&mut tile, &state.water.lock().unwrap(), "#33eaff", "#33eaff", 1);
-        state.draw_tile(&mut tile, &state.land.lock().unwrap(), "#aaaaaa", "#aaaaaa", 1);
-        state.draw_tile(&mut tile, &state.road.lock().unwrap(), "#ff9100", "#ff9100", 3);
-        state.draw_tile(&mut tile, &state.building.lock().unwrap(), "#5393ff", "#2196f3", 1);
+        state.draw_tile(
+            &mut tile, 
+            &state.water.lock().unwrap(), 
+            &PolygonProps::new("#33eaff", "#33eaff", 3), 
+            &PolylineProps::new("#33eaff", 3), 
+            &TextProps::new("black", 20, 700)
+        );
+        
+        state.draw_tile(
+            &mut tile, 
+            &state.land.lock().unwrap(), 
+            &PolygonProps::new("#aaaaaa", "#eeeeee", 1), 
+            &PolylineProps::new("#eeeeee", 3), 
+            &TextProps::new("black", 20, 700)
+        );
+
+        state.draw_tile(
+            &mut tile, 
+            &state.road.lock().unwrap(), 
+            &PolygonProps::new("#ff9100", "#ff9100", 1), 
+            &PolylineProps::new("#ff9100", 3), 
+            &TextProps::new("black", 20, 700)
+        );
+
+        state.draw_tile(
+            &mut tile, 
+            &state.building.lock().unwrap(), 
+            &PolygonProps::new("#5393ff", "#ffffff", 1), 
+            &PolylineProps::new("#2196f3", 3), 
+            &TextProps::new("black", 20, 700)
+        );
 
         tile.sort_tags();
         let data = svg_to_png(&tile.dump()).unwrap();

@@ -29,3 +29,29 @@ impl Polygon {
         &self.points
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_polygon() {
+        let mut polygon = Polygon::new();
+        polygon.append(&Point { x: 0.0, y: 0.0 });
+        polygon.append(&Point { x: 1.0, y: 0.0 });
+        assert_eq!(polygon.points_count(), 2);
+        polygon.append(&Point { x: 1.0, y: 1.0 });
+        polygon.append(&Point { x: 0.0, y: 1.0 });
+        assert_eq!(polygon.points_count(), 4);
+
+        assert_eq!(polygon.point(0), &Point { x: 0.0, y: 0.0 });
+        assert_eq!(polygon.point(1), &Point { x: 1.0, y: 0.0 });
+        assert_eq!(polygon.point(2), &Point { x: 1.0, y: 1.0 });
+        assert_eq!(polygon.point(3), &Point { x: 0.0, y: 1.0 });
+
+        assert_eq!(polygon.points[0], Point { x: 0.0, y: 0.0 });
+        assert_eq!(polygon.points[1], Point { x: 1.0, y: 0.0 });
+        assert_eq!(polygon.points[2], Point { x: 1.0, y: 1.0 });
+        assert_eq!(polygon.points[3], Point { x: 0.0, y: 1.0 });
+    }
+}
