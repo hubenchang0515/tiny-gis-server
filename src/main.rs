@@ -9,10 +9,9 @@ use std::sync::Mutex;
 use actix_web::{get, web, App, HttpResponse, HttpServer, Responder};
 use cache::{Cache, MemoryCache};
 use geography::ShapeFile;
-use geometry::{Shape, Point};
-use tile::{PolygonProps, PolylineProps, SvgTile, TextProps, Tile};
+use geometry::{Shape, Point, Rectangle};
+use tile::{Proj, SvgRender,PolygonProps, PolylineProps, SvgTile, TextProps, Tile};
 
-use crate::{geometry::Rectangle, tile::{tile::svg_to_png, Proj}};
 
 #[allow(dead_code)]
 pub mod colors {
@@ -72,6 +71,8 @@ struct AppState {
     land: Mutex<ShapeFile>,
     road: Mutex<ShapeFile>,
     building: Mutex<ShapeFile>,
+
+    render: Mutex<SvgRender>,
     cache: Mutex<MemoryCache>,
 }
 
@@ -83,6 +84,8 @@ impl AppState {
             land: Mutex::new(ShapeFile::new()),
             road: Mutex::new(ShapeFile::new()), 
             building: Mutex::new(ShapeFile::new()),
+
+            render: Mutex::new(SvgRender::new()),
             cache: Mutex::new(MemoryCache::new()),
         }
     }
@@ -279,7 +282,8 @@ async fn maps(state: web::Data<AppState>, path: web::Path<(u64, u64, u64)>) -> i
         );
 
         tile.sort_tags();
-        let data = svg_to_png(&tile.dump()).unwrap();
+        let render = state.render.lock().unwrap();
+        let data = render.to_png(&tile.dump()).unwrap();
         cache.save(&id, data.clone());
         HttpResponse::Ok()
             .append_header(("Access-Control-Allow-Origin", "*"))

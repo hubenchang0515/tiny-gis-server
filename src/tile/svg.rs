@@ -1,3 +1,4 @@
+use resvg::{tiny_skia::Pixmap, usvg::{fontdb::Database as FontDatabase, Tree, Options, Transform}};
 use crate::{geometry::{Point, Polygon, Polyline, Rectangle}, xml::XmlNode};
 use super::{Proj, Tile};
 
@@ -233,6 +234,39 @@ impl Tile for SvgTile {
     }
 }
 
+pub struct SvgRender {
+    fontdb: FontDatabase
+}
+
+impl SvgRender {
+    pub fn new() -> SvgRender {
+        let mut fontdb = FontDatabase::new();
+        fontdb.load_system_fonts();
+        SvgRender { fontdb }
+    }
+
+    pub fn to_png(&self, svg: &Vec<u8>) -> Option<Vec<u8>> {
+        let pixmap = Pixmap::new(256, 256);
+        if pixmap.is_none() {
+            None
+        } else {
+            let tree = Tree::from_data(svg, &Options::default(), &self.fontdb);
+            match tree {
+                Ok(tree) => {
+                    let mut pixmap = pixmap.unwrap();
+                    resvg::render(&tree, Transform::from_rotate(0.0), &mut pixmap.as_mut());
+                    Some(pixmap.encode_png().unwrap())
+                }
+                Err(err) => {
+                    println!("{}", String::from_utf8((*svg).clone()).unwrap());
+                    println!("{}", err);
+                    None
+                }
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::tile::proj::consts::{LATITUDE_MIN, LONGITUDE_MIN, LATITUDE_MAX, LONGITUDE_MAX};
@@ -256,7 +290,7 @@ mod tests {
     }
 
     #[test]
-    fn test_svg_render() {
+    fn test_svg_draw() {
         let proj = Proj::default();
         let mut svg = SvgTile::new(0, 0, 0, proj);
         svg.append_text(
@@ -293,5 +327,19 @@ mod tests {
 
         svg.sort_tags();
         println!("SVG:{}", String::from_utf8(svg.dump()).unwrap());
+    }
+
+    #[test]
+    fn text_svg_render() {
+        let svg = r#"
+        <svg xmlns="http://www.w3.org/2000/svg" width="300" height="200">
+            <rect width="100%" height="100%" stroke="cyan" stroke-width="4" fill="red" />
+            <circle cx="150" cy="100" r="80" fill="green" />
+            <text x="150" y="115" font-size="16" text-anchor="middle" fill="white">文本测试</text>
+        </svg>
+        "#.as_bytes().to_vec();
+        
+        let svg_render = SvgRender::new();
+        println!("{:?}", svg_render.to_png(&svg).unwrap());
     }
 }
